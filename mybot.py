@@ -2,7 +2,6 @@ import spacy
 import telegram
 import wikipedia
 from telegram.ext import Updater, MessageHandler, Filters,CommandHandler,ConversationHandler
-#from clarifai.rest import ClarifaiApp, client, Image
 
 
 
@@ -28,13 +27,6 @@ def extract_intent(doc):
 	else:
 		intent = verbSyns[0][0] + dobjSyns[0][0].capitalize()
 	return intent
-#Verify if the user question is related to pizza
-def relate_pizza(doc):
-	substitutes = ('pizza','pie','dish')
-	for token in doc:
-		if token.text in substitutes:
-			return True
-	return False
 #Converts the user_data dictionary to a string
 #user_data contains the kind of pizza and number of pizzas the user wants
 def details_to_str(user_data):
@@ -44,8 +36,9 @@ def details_to_str(user_data):
 	return "\n".join(details).join(['\n', '\n'])
 # Initialize conversation with the user
 def start(update, context):
-	update.message.reply_text('Hi! my name is mayele. I can help make a pizza order.You can also ask me anything')
+	update.message.reply_text('Hi! my name is mayele. I can help make a pizza order.')
 	return 'ORDERING'
+#For simplicity, the intent_exit() can recognize only one intent: orderPizza
 def intent_ext(update, context):
 	msg = update.message.text
 	nlp = spacy.load('en')
@@ -62,6 +55,7 @@ def intent_ext(update, context):
 				return 'ORDERING'
 			return
 		update.message.reply_text('Please rephrase your request. Be as specific as possible!')
+#add_info function is the callback for the ADD_INFO state handler
 def add_info(update, context):
 	msg = update.message.text
 	nlp = spacy.load('en')
@@ -79,6 +73,7 @@ def add_info(update, context):
 					return ConversationHandler.END
 	update.message.reply_text("Cannot extract necessary info. Please try again.")
 	return 'ADD_INFO'
+#cancel() sends a goodbye message to the user and switches the state to ConversationHandler.END
 def cancel(update, context):
 	update.message.reply_text("Have a nice day!")
 	return ConversationHandler.END
