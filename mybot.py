@@ -78,7 +78,7 @@ def cancel(update, context):
 	update.message.reply_text("Have a nice day!")
 	return ConversationHandler.END
 def main():
-    updater = Updater("1021949571:AAHPE5YYXjy2TE4OkhnMf6bpWljKFKxNbso", use_context=True)
+    updater = Updater("my_token", use_context=True)
     disp = updater.dispatcher
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
