@@ -1,11 +1,10 @@
 import spacy
 import telegram
-import wikipedia
+import mysql.connector
+import json
 from telegram.ext import Updater, MessageHandler, Filters,CommandHandler,ConversationHandler
 
 
-
-#Extract user intent
 def extract_intent(doc):
 	for token in doc:
 		if token.dep_ == 'dobj':
@@ -21,14 +20,12 @@ def extract_intent(doc):
 	dobjSyns = [item for item in dobjList if dobj in item]
 	#replace the transitive verb and the direct object with synonyms supported by the application
 	#and compose the string that represents the intent
-	intent = verbSyns[0][0] + dobjSyns[0][0].capitalize()
 	if len(verbSyns) == 0 or len(dobjSyns) == 0:
 		intent = 'unrecognized'
 	else:
 		intent = verbSyns[0][0] + dobjSyns[0][0].capitalize()
 	return intent
-#Converts the user_data dictionary to a string
-#user_data contains the kind of pizza and number of pizzas the user wants
+# Transforms a dictionary into a string
 def details_to_str(user_data):
 	details = list()
 	for key, value in user_data.items():
@@ -39,6 +36,27 @@ def start(update, context):
 	update.message.reply_text('Hi! my name is mayele. I can help make a pizza order.')
 	return 'ORDERING'
 #For simplicity, the intent_exit() can recognize only one intent: orderPizza
+def strore_info(dic):
+	json_str = json.dumps(dic) # Convert orderdict dictionary into JSON string
+	mydb=mysql.connector.connect(
+		host="localhost",
+		user="root",
+		passwd="my_password",
+		database="mybot")
+	query = ("""INSERT INTO orders (product, ptype, qty)
+     SELECT product, ptype, qty FROM
+         JSON_TABLE(
+          %s,
+           "$" COLUMNS(
+             qty    INT PATH '$.qty',
+             product   VARCHAR(30) PATH "$.product",
+             ptype     VARCHAR(30) PATH "$.ptype"
+           )
+         ) AS jt1""") #Define an insert SQL statement to be passed into the database for processing
+	mycursor = mydb.cursor()
+	mycursor.execute(query, (json_str,))
+	mydb.commit()
+# Extract user intent
 def intent_ext(update, context):
 	msg = update.message.text
 	nlp = spacy.load('en')
@@ -54,9 +72,10 @@ def intent_ext(update, context):
 				update.message.reply_text('Your intent is not recognized. Please rephrase your request.')
 				return 'ORDERING'
 			return
-		update.message.reply_text('Please rephrase your request. Be as specific as possible!')
+	update.message.reply_text('Please rephrase your request. Be as specific as possible!')
 #add_info function is the callback for the ADD_INFO state handler
 def add_info(update, context):
+	add_info.type = ''
 	msg = update.message.text
 	nlp = spacy.load('en')
 	doc = nlp(msg)
@@ -67,10 +86,28 @@ def add_info(update, context):
 				if child.dep_ == 'amod' or child.dep_ == 'compound':
 					context.user_data['type'] = child.text
 					user_data = context.user_data
+					strore_info(user_data)
 					update.message.reply_text("Your order has been placed."
                                     "{}"
                                     "Have a nice day!".format(details_to_str(user_data)))
 					return ConversationHandler.END
+	#In case the User did not provide a full sentence
+	for token in doc:
+		if token.pos_ == 'PROPN' or token.pos_ == 'NOUN' or token.pos_ == 'ADJ':
+			add_info.type = token.text
+			update.message.reply_text("Do you want a " + token.text + " pizza?")
+			return 'ADD_INFO'
+	#Handles yes or no answers
+	if len(list(doc)) == 1:
+		res = list(doc)[0]
+		if(res.text == 'yes'):
+			context.user_data['type'] = add_info.type
+			user_data = context.user_data
+			strore_info(user_data)
+			update.message.reply_text("Your order has been placed."
+                            "{}"
+                            "Have a nice day!".format(details_to_str(user_data)))
+			return ConversationHandler.END
 	update.message.reply_text("Cannot extract necessary info. Please try again.")
 	return 'ADD_INFO'
 #cancel() sends a goodbye message to the user and switches the state to ConversationHandler.END
@@ -95,6 +132,7 @@ def main():
     disp.add_handler(conv_handler)
     updater.start_polling()
     updater.idle()
-#the code responsible for interactions with telegram
+
 if __name__ == '__main__':
 	main()
+
